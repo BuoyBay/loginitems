@@ -1,0 +1,110 @@
+#If TargetMac Then
+    Private Declare Function LoadFramework Lib "c" Alias "dlopen" (libraryPath As String, loadOptions As Int32) As Ptr
+    Private Declare Function NativeClass Lib "objc" Alias "objc_getClass" (name As String) As Ptr
+    Private Declare Function NativeSelector Lib "objc" Alias "sel_registerName" (name As String) As Ptr
+    Private Declare Function Responds Lib "Foundation" Selector "respondsToSelector:" (object As Ptr, action As Ptr) As UInt8
+    Private Declare Function MainService Lib "Foundation" Selector "mainAppService" (cls As Ptr) As Ptr
+    Private Declare Function ServiceStatus Lib "Foundation" Selector "status" (service As Ptr) As Integer
+    Private Declare Function RegisterNative Lib "Foundation" Selector "registerAndReturnError:" (service As Ptr, ByRef errorObject As Ptr) As UInt8
+    Private Declare Function UnregisterNative Lib "Foundation" Selector "unregisterAndReturnError:" (service As Ptr, ByRef errorObject As Ptr) As UInt8
+    Private Declare Function ErrorDescription Lib "Foundation" Selector "localizedDescription" (errorObject As Ptr) As CFStringRef
+    Private Declare Function MainBundle Lib "Foundation" Selector "mainBundle" (cls As Ptr) As Ptr
+    Private Declare Function BundlePath Lib "Foundation" Selector "bundlePath" (bundle As Ptr) As CFStringRef
+    Private Declare Sub OpenSettingsNative Lib "Foundation" Selector "openSystemSettingsLoginItems" (cls As Ptr)
+    Private Declare Function ErrorCode Lib "Foundation" Selector "code" (errorObject As Ptr) As Integer
+
+    Private Class FrameworkState
+        Public Shared Property Handle As Ptr = Nil
+    End Class
+    Private Function HasContainingApplication() As Boolean
+        Dim bundle As Ptr = MainBundle(NativeClass("NSBundle"))
+        If bundle = Nil Then Return False
+        Return String.Right(String.LCase(CType(BundlePath(bundle), String)), 4) = ".app"
+    End Function
+    Private Function ServiceClass() As Ptr
+        If FrameworkState.Handle = Nil Then FrameworkState.Handle = LoadFramework("/System/Library/Frameworks/ServiceManagement.framework/ServiceManagement", 1)
+        If FrameworkState.Handle = Nil Then Return Nil
+        Dim cls As Ptr = NativeClass("SMAppService")
+        If cls = Nil Then Return Nil
+        If Responds(cls, NativeSelector("mainAppService")) = 0 Then Return Nil
+        Return cls
+    End Function
+#End If
+
+Public Enum LoginItemState As Integer
+    Unsupported = -1
+    NotRegistered = 0
+    Enabled = 1
+    RequiresApproval = 2
+    NotFound = 3
+End Enum
+
+Public Class LoginItemException Inherits Exception
+    Public Property NativeCode As Integer
+    Public Sub Constructor(message As String, code As Integer)
+        Super.Constructor(message, code)
+        Me.NativeCode = code
+    End Sub
+End Class
+
+Public Function LoginItemsSupported() As Boolean
+    #If TargetMac Then
+        Return ServiceClass() <> Nil
+    #Else
+        Return False
+    #End If
+End Function
+
+''' Controls the containing app's main login service (macOS 13+). No mutations occur on construction.
+Public Class MainAppLoginItem
+    Public Function Status() As LoginItemState
+        #If TargetMac Then
+            Dim cls As Ptr = ServiceClass()
+            If cls = Nil Then Return LoginItemState.Unsupported
+            If Not HasContainingApplication() Then Return LoginItemState.NotFound
+            Dim service As Ptr = MainService(cls)
+            If service = Nil Then Return LoginItemState.NotFound
+            Return CType(ServiceStatus(service), LoginItemState)
+        #Else
+            Return LoginItemState.Unsupported
+        #End If
+    End Function
+    Public Function Register() As LoginItemState
+        Return Me.ChangeRegistration(True)
+    End Function
+    Public Function Unregister() As LoginItemState
+        Return Me.ChangeRegistration(False)
+    End Function
+    Private Function ChangeRegistration(registering As Boolean) As LoginItemState
+        If Not LoginItemsSupported() Then Throw New LoginItemException("Login items require macOS 13 or newer", -1)
+        #If TargetMac Then
+            If Not HasContainingApplication() Then Throw New LoginItemException("Login registration requires a signed .app bundle", -1)
+            Dim service As Ptr = MainService(ServiceClass())
+            If service = Nil Then Throw New LoginItemException("No containing application login service was found", -1)
+            Dim nativeError As Ptr = Nil
+            Dim success As Boolean
+            If registering Then
+                success = RegisterNative(service, nativeError) <> 0
+            Else
+                success = UnregisterNative(service, nativeError) <> 0
+            End If
+            If Not success Then
+                If registering And Me.Status() = LoginItemState.RequiresApproval Then Return LoginItemState.RequiresApproval
+                If nativeError <> Nil Then Throw New LoginItemException(CType(ErrorDescription(nativeError), String), ErrorCode(nativeError))
+                Throw New LoginItemException("Login item registration failed", -1)
+            End If
+        #End If
+        Return Me.Status()
+    End Function
+End Class
+
+''' Explicitly opens the system Login Items settings; does not register anything.
+Public Sub OpenLoginItemSettings()
+    #If TargetMac Then
+        Dim cls As Ptr = ServiceClass()
+        If cls = Nil Then Throw New UnsupportedOperationException("Login item settings require macOS 13 or newer")
+        OpenSettingsNative(cls)
+    #Else
+        Throw New UnsupportedOperationException("Login item settings require macOS")
+    #End If
+End Sub
