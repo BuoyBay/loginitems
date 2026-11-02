@@ -2,7 +2,7 @@
     "schema": 1,
     "name": "loginitems",
     "version": "0.1.0",
-    "description": "macOS launch-at-login via SMAppService",
+    "description": "Launch at login",
     "platforms": [
         "arm64-apple-macos",
         "x86_64-apple-macos",

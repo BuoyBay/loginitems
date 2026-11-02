@@ -1,4 +1,4 @@
-# macOS launch-at-login via SMAppService
+# Launch at login
 
 `Import loginitems` provides modern main-application login support using
 `SMAppService.mainAppService` (macOS 13+). The ServiceManagement framework is loaded
