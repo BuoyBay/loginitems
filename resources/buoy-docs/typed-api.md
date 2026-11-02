@@ -50,8 +50,6 @@ Generated from the package source declarations. Platform guards are shown where 
 
 Returns: no value.
 
-## LoginItems functions
-
 ### LoginItemsSupported
 
 `Public Function LoginItemsSupported() As Boolean`

@@ -25,10 +25,6 @@ The loaded system framework remains loaded for process lifetime. No shell comman
 LaunchAgent plist installation, permission bypass or automatic fallback is used.
 
 [Apple's registration API](https://developer.apple.com/documentation/servicemanagement/smappservice/register())
-describes user approval. The SDK also requires code signing. Read-only tests verify
-availability/status from a console. Register/unregister are compile-checked only;
-no test enables autostart or changes login settings.
-
-Maintainers run the private validation suite before release. See the repository README for public build instructions.
+describes user approval and the required code-signing/application context.
 
 `Register()` returns `RequiresApproval` when macOS reports a pending approval even if registration also returns an error. `OpenLoginItemSettings()` explicitly opens the system settings pane without registering an item.

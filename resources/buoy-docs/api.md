@@ -39,5 +39,4 @@ Runtime support requires macOS 13 or newer. Registration additionally requires a
 
 See the [complete usage example](getting-started.md) and the [package overview](index.md).
 
-
 [Full typed API: properties, parameters, defaults, and returns](typed-api.md)
